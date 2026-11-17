@@ -51,8 +51,13 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Dials: URL, title, group, tags, notes, favicon, thumbnail | MVP | |
 | Groups with one level of nesting ("Dev > gRPC") | MVP | Removes the need for "Dev I/II/III" |
 | Import from browser bookmarks | MVP | Folder becomes group |
-| Import from Group Speed Dial / FVD Speed Dial exports | MVP | Need real sample exports to reverse the format |
+| Import from Group Speed Dial / FVD Speed Dial exports | MVP | Formats documented in [import-formats.md](import-formats.md), incl. thumbnails and favicons |
+| Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
+| Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
 | Export / import of Dialdex JSON (versioned schema) | MVP | Also the backup mechanism |
+| More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.5) |
+| More exporters (HTML bookmark file, CSV) | later | Same contract, reversed |
+| Import settings from old addons (a handful of keys) | later | |
 | Archive instead of delete | v1 | Archived dials stay searchable on demand |
 | Undo for destructive actions | v1 | |
 
@@ -114,8 +119,15 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Feature | Priority | Notes |
 |---|---|---|
 | Light / dark / system theme | MVP | |
+| Settings page with live preview (in new tab panel and as options page) | MVP | One page, grouped sections, search box over settings |
+| Typed, versioned settings schema with defaults and migrations | MVP | Unknown or old keys never break the page |
+| Appearance: dial size, gap, radius, title position, fonts, group colors, background image/color | v1 | |
+| Animated page transition (slide to next/previous group) | v1 | Respects `prefers-reduced-motion`, never blocks input, see open decision 6 |
 | English and German UI | v1 | Code and identifiers stay en-US |
 | Keyboard navigation everywhere, screen reader labels | v1 | |
+
+Settings scope: Group Speed Dial has about 70 options and FVD about 120. That is the warning, not the target.
+Every setting must justify itself. Each setting costs testing, documentation and a migration.
 
 ### 3.8 Sync (later)
 
@@ -196,6 +208,8 @@ interface Dial {
   faviconRef?: string;
   thumbnailRef?: string; // blob stored separately
   position: number;      // order inside group
+  slotIndex?: number;    // fixed grid slot, when the group uses a fixed layout
+  source?: { importer: string; externalKey: string; importedAt: number }; // provenance, makes re-import idempotent
   createdAt: number;
   updatedAt: number;
   lastOpenedAt?: number;
@@ -204,13 +218,47 @@ interface Dial {
   health?: { status: "ok" | "dead" | "redirect" | "unknown"; checkedAt: number; redirectTo?: string };
 }
 
-interface Group     { id: string; name: string; parentId?: string; position: number; viewMode: "grid" | "compact" | "list"; }
-interface Tag       { id: string; name: string; color?: string; source: "user" | "rule" | "suggested"; }
+interface Group {
+  id: string; name: string; parentId?: string; position: number;
+  viewMode: "grid" | "compact" | "list";
+  layout?: { rows: number; cols: number };            // fixed grid (imported from Group Speed Dial), else auto flow
+  appearance?: { background?: string; color?: string };
+  source?: { importer: string; externalKey: string; importedAt: number };
+}
+interface Tag       { id: string; name: string; color?: string; icon?: string; source: "user" | "rule" | "suggested" | "import"; }
 interface SmartGroup{ id: string; name: string; query: string; position: number; }
 interface TagRule   { id: string; pattern: string; kind: "domain" | "regex"; tagIds: string[]; enabled: boolean; }
 ```
 
-Thumbnails and page text live in separate object stores, so the main dial list stays small and fast to load.
+Thumbnails, favicons and page text live in separate object stores (blobs, not data URLs), so the main dial list
+stays small and fast to load. The blob store is part of M1, because the first import already brings ~700 images.
+
+### 4.5 Import / export contract
+
+Importers and exporters are the main extension point. They live in the core layer, have no browser API
+dependency and are unit tested against synthetic fixtures.
+
+```ts
+interface Importer {
+  id: string;                                    // "group-speed-dial", "fvd", "bookmarks", "dialdex-json"
+  displayName: string;
+  detect(raw: string): number;                   // confidence 0..1, used to pick the importer for a dropped file
+  parse(raw: string): ImportBundle;              // pure, throws a typed error on unknown format versions
+}
+
+interface ImportBundle {                         // neutral format, independent of any addon
+  groups: ImportedGroup[]; dials: ImportedDial[]; tags: ImportedTag[];
+  images: ImportedImage[];                       // favicons + thumbnails, still as data URLs
+  skipped: { reason: string; count: number }[];  // shown in the preview
+}
+
+interface Exporter { id: string; displayName: string; export(data: DialdexSnapshot): Blob; }
+```
+
+Flow: `detect` -> `parse` -> preview (counts, duplicates, skipped, strategy: merge / replace / add as new group)
+-> write in batches (one transaction per batch, images converted to blobs) -> rebuild search index.
+
+MV3 forbids remotely hosted code, so all importers are compiled in. There is no plugin loader, only a registry.
 
 ### 4.4 Permissions plan
 
@@ -233,8 +281,8 @@ Optional permissions are requested at runtime, at the moment the user enables th
 | Milestone | Content | Result |
 |---|---|---|
 | **M0 Setup** | Repo, WXT skeleton, CI, lint, tests, GPL-3.0, README | Empty new tab builds for both browsers |
-| **M1 Core data** | Data model, Dexie storage, JSON export/import | Dials survive restarts |
-| **M2 Import** | Bookmarks, Group Speed Dial, FVD | Own real data loaded (dogfooding starts) |
+| **M1 Core data** | Data model, Dexie storage incl. blob store, settings schema, JSON export/import | Dials survive restarts |
+| **M2 Import** | Importer contract + registry, preview, Bookmarks, Group Speed Dial, FVD incl. thumbnails | Own real data loaded (dogfooding starts) |
 | **M3 UI basics** | Group tree, grid/compact/list, drag and drop, fallback tiles | Usable as daily new tab |
 | **M4 Retrieval** | Command palette, MiniSearch index, frecency, search operators | The main differentiator works |
 | **M5 Indexing + tags** | Metadata capture, rule tags, TF-IDF suggestions, tag management | Auto tagging |
@@ -262,7 +310,11 @@ Personal use starts after M3. Store release after M8.
 ## 7. Open decisions
 
 1. ~~**UI framework.**~~ Decided 2026-11-17: **Svelte 5**.
-2. **Import formats.** Need real export files from Group Speed Dial and FVD Speed Dial to write the mappers.
-3. **Nesting depth of groups.** One level (proposed) or unlimited?
+2. ~~**Import formats.**~~ Done 2026-11-17, see [import-formats.md](import-formats.md). Open: Group Speed Dial
+   folder format (no sample), larger FVD sample.
+3. **Nesting depth of groups.** One level (proposed) or unlimited? Group Speed Dial folders may influence this.
 4. **Minimum browser versions.** Proposal: last two major versions of Chrome and Firefox, plus Firefox ESR.
-5. **Repo name / domain.** `holonsoft/dialdex`, check availability of the name on GitHub, both stores and a domain before M0.
+5. **Repo name / domain.** GitHub done: `holonsoft/dialdex`. Store names and a domain still to check.
+6. **Navigation model vs. page transition.** The old addons treat "one group = one page", so a slide animation
+   between pages is natural. Dialdex has a group tree for 100+ groups. Proposal: arrows / swipe / mouse wheel
+   on the edge move to the next sibling group with a slide; jumping via tree or palette switches without animation.
