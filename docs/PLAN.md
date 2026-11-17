@@ -55,8 +55,9 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
 | Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
 | Export / import of Dialdex JSON (own versioned schema, see 4.5) | MVP | Also the backup mechanism |
-| Filtered export and import via query (`tag:company -tag:private`) | MVP | Same query parser as search |
-| Sensitive tags (`exportPolicy: "exclude"`) | MVP | e.g. "private" never leaves the machine unless overridden per export |
+| Exclude tags on the fly during import and export: the preview lists every tag in the data, you untick any of them | MVP | Tags are free, user defined. Nothing is predefined. |
+| Filter via query for power users (`tag:a -tag:b group:Dev`) | v1 | Same query parser as search |
+| Optional default per tag (`exportPolicy: "exclude"`) | v1 | Pre-unticks that tag in every export; still changeable on the fly |
 | Smart merge on import: skip / update / merge tags for existing dials | MVP | Matching rules in 4.5 |
 | Saved export profiles ("Company laptop": `tag:company`) | v1 | One click export with fixed filter |
 | More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.4) |
@@ -230,7 +231,7 @@ interface Group {
   source?: { importer: string; externalKey: string; importedAt: number };
 }
 interface Tag       { id: string; name: string; color?: string; icon?: string; source: "user" | "rule" | "suggested" | "import";
-                      exportPolicy: "include" | "exclude"; }   // "exclude" = sensitive, see 4.5
+                      exportPolicy?: "include" | "exclude"; }  // optional default for the export selection, see 4.5
 interface SmartGroup{ id: string; name: string; query: string; position: number; }
 interface TagRule   { id: string; pattern: string; kind: "domain" | "regex"; tagIds: string[]; enabled: boolean; }
 ```
@@ -273,17 +274,24 @@ Our own format, fully under our control. The foreign formats are only an input; 
 - A published JSON Schema file (`schema/dialdex-v1.schema.json`) and migrations for every version bump.
   Older files must always import; newer files fail with a clear message.
 - Dials, groups and tags keep their UUIDs. Images are optional (`--with-images`), as base64 in the same file.
-- The export header records the filter used (`filter: "tag:company"`), so the receiver sees what was left out.
+- The export header records the filter used (`excludedTags: [...]`, `filter`), so the receiver sees what was left out.
 
 **Filtering**
 
-| Side | Purpose | Rule |
-|---|---|---|
-| Export | Privacy boundary. Data that is not exported cannot leak. | Query filter + tags with `exportPolicy: "exclude"` are always removed unless the user overrides them for this export. |
-| Import | Convenience. | Same query filter, applied to the bundle before the preview. |
+Tags are free text, defined by the user. Dialdex knows no special tags; the examples here are just examples.
 
-Recommendation in the UI: allowlist (`tag:company`) over denylist (`-tag:private`). A denylist silently leaks
-every dial you forgot to tag.
+Both import and export show the same selection step before anything happens:
+
+- A list of all tags found in the data, each with a dial count and a checkbox. Untick a tag = skip all dials with it.
+- An extra entry "dials without tags" (count + checkbox).
+- **Exclusion wins:** a dial tagged with one ticked and one unticked tag is skipped.
+- Live counter: "412 of 746 dials will be imported".
+- Optional: the same as a query for power users, and a per-tag default (`exportPolicy`) that pre-unticks a tag.
+
+| Side | Purpose |
+|---|---|
+| Export | Privacy boundary. Data that is not exported cannot leak. |
+| Import | Convenience. Filtering here means the data is already on the target machine (in the file). |
 
 **Matching existing dials (in this order)**
 
