@@ -55,7 +55,7 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
 | Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
 | Export / import of Dialdex JSON (own versioned schema, see 4.5) | MVP | Also the backup mechanism |
-| Exclude tags on the fly during import and export: the preview lists every tag in the data, you untick any of them | MVP | Tags are free, user defined. Nothing is predefined. |
+| Exclude tags and groups on the fly during import and export: the preview lists every tag and group, you untick any of them | MVP | Tags are free, user defined. Nothing is predefined. |
 | Filter via query for power users (`tag:a -tag:b group:Dev`) | v1 | Same query parser as search |
 | Optional default per tag (`exportPolicy: "exclude"`) | v1 | Pre-unticks that tag in every export; still changeable on the fly |
 | Smart merge on import: skip / update / merge tags for existing dials | MVP | Matching rules in 4.5 |
@@ -284,7 +284,9 @@ Both import and export show the same selection step before anything happens:
 
 - A list of all tags found in the data, each with a dial count and a checkbox. Untick a tag = skip all dials with it.
 - An extra entry "dials without tags" (count + checkbox).
-- **Exclusion wins:** a dial tagged with one ticked and one unticked tag is skipped.
+- A list of all groups, same pattern. Untick a group = skip all its dials. Needed for foreign imports, which
+  usually have no tags (Group Speed Dial dials have none).
+- **Exclusion wins:** a dial is skipped if any of its tags or its group is unticked.
 - Live counter: "412 of 746 dials will be imported".
 - Optional: the same as a query for power users, and a per-tag default (`exportPolicy`) that pre-unticks a tag.
 
