@@ -1,0 +1,8 @@
+node_modules/
+.output/
+.wxt/
+dist/
+*.zip
+.env*
+# local import samples (contain private URLs)
+samples/
