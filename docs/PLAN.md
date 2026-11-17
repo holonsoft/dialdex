@@ -54,7 +54,11 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Import from Group Speed Dial / FVD Speed Dial exports | MVP | Formats documented in [import-formats.md](import-formats.md), incl. thumbnails and favicons |
 | Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
 | Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
-| Export / import of Dialdex JSON (versioned schema) | MVP | Also the backup mechanism |
+| Export / import of Dialdex JSON (own versioned schema, see 4.6) | MVP | Also the backup mechanism |
+| Filtered export and import via query (`tag:company -tag:private`) | MVP | Same query parser as search |
+| Sensitive tags (`exportPolicy: "exclude"`) | MVP | e.g. "private" never leaves the machine unless overridden per export |
+| Smart merge on import: skip / update / merge tags for existing dials | MVP | Matching rules in 4.6 |
+| Saved export profiles ("Company laptop": `tag:company`) | v1 | One click export with fixed filter |
 | More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.4) |
 | More exporters (HTML bookmark file, CSV) | later | Same contract, reversed |
 | Import settings from old addons (a handful of keys) | later | |
@@ -225,7 +229,8 @@ interface Group {
   appearance?: { background?: string; color?: string };
   source?: { importer: string; externalKey: string; importedAt: number };
 }
-interface Tag       { id: string; name: string; color?: string; icon?: string; source: "user" | "rule" | "suggested" | "import"; }
+interface Tag       { id: string; name: string; color?: string; icon?: string; source: "user" | "rule" | "suggested" | "import";
+                      exportPolicy: "include" | "exclude"; }   // "exclude" = sensitive, see 4.6
 interface SmartGroup{ id: string; name: string; query: string; position: number; }
 interface TagRule   { id: string; pattern: string; kind: "domain" | "regex"; tagIds: string[]; enabled: boolean; }
 ```
@@ -259,6 +264,37 @@ Flow: `detect` -> `parse` -> preview (counts, duplicates, skipped, strategy: mer
 -> write in batches (one transaction per batch, images converted to blobs) -> rebuild search index.
 
 MV3 forbids remotely hosted code, so all importers are compiled in. There is no plugin loader, only a registry.
+
+### 4.6 Dialdex exchange format and smart merge
+
+Our own format, fully under our control. The foreign formats are only an input; Dialdex JSON is the reference.
+
+- JSON with `format: "dialdex"`, `schemaVersion` (integer), `exportedAt`, `sourceInstanceId` (random, per install).
+- A published JSON Schema file (`schema/dialdex-v1.schema.json`) and migrations for every version bump.
+  Older files must always import; newer files fail with a clear message.
+- Dials, groups and tags keep their UUIDs. Images are optional (`--with-images`), as base64 in the same file.
+- The export header records the filter used (`filter: "tag:company"`), so the receiver sees what was left out.
+
+**Filtering**
+
+| Side | Purpose | Rule |
+|---|---|---|
+| Export | Privacy boundary. Data that is not exported cannot leak. | Query filter + tags with `exportPolicy: "exclude"` are always removed unless the user overrides them for this export. |
+| Import | Convenience. | Same query filter, applied to the bundle before the preview. |
+
+Recommendation in the UI: allowlist (`tag:company`) over denylist (`-tag:private`). A denylist silently leaks
+every dial you forgot to tag.
+
+**Matching existing dials (in this order)**
+
+1. Same dial UUID (file came from Dialdex) or same `source.externalKey` (re-import from a foreign addon).
+2. Same normalized URL: lower-case host, no `www.`, no default port, no trailing slash, no fragment,
+   tracking parameters removed (`utm_*`, `fbclid`, `gclid`, ...), `http` = `https`.
+3. No match: new dial.
+
+**Strategy per match** (chosen in the preview, default first): skip / update title + metadata / merge tags only.
+Tags and groups are matched by name (case-insensitive), not by ID, so two machines with independent tag lists fit
+together. Import never deletes. Propagating deletions needs tombstones and belongs to sync (3.8).
 
 ### 4.5 Permissions plan
 
