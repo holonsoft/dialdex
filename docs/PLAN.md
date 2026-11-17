@@ -54,10 +54,10 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Import from Group Speed Dial / FVD Speed Dial exports | MVP | Formats documented in [import-formats.md](import-formats.md), incl. thumbnails and favicons |
 | Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
 | Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
-| Export / import of Dialdex JSON (own versioned schema, see 4.6) | MVP | Also the backup mechanism |
+| Export / import of Dialdex JSON (own versioned schema, see 4.5) | MVP | Also the backup mechanism |
 | Filtered export and import via query (`tag:company -tag:private`) | MVP | Same query parser as search |
 | Sensitive tags (`exportPolicy: "exclude"`) | MVP | e.g. "private" never leaves the machine unless overridden per export |
-| Smart merge on import: skip / update / merge tags for existing dials | MVP | Matching rules in 4.6 |
+| Smart merge on import: skip / update / merge tags for existing dials | MVP | Matching rules in 4.5 |
 | Saved export profiles ("Company laptop": `tag:company`) | v1 | One click export with fixed filter |
 | More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.4) |
 | More exporters (HTML bookmark file, CSV) | later | Same contract, reversed |
@@ -230,7 +230,7 @@ interface Group {
   source?: { importer: string; externalKey: string; importedAt: number };
 }
 interface Tag       { id: string; name: string; color?: string; icon?: string; source: "user" | "rule" | "suggested" | "import";
-                      exportPolicy: "include" | "exclude"; }   // "exclude" = sensitive, see 4.6
+                      exportPolicy: "include" | "exclude"; }   // "exclude" = sensitive, see 4.5
 interface SmartGroup{ id: string; name: string; query: string; position: number; }
 interface TagRule   { id: string; pattern: string; kind: "domain" | "regex"; tagIds: string[]; enabled: boolean; }
 ```
@@ -265,7 +265,7 @@ Flow: `detect` -> `parse` -> preview (counts, duplicates, skipped, strategy: mer
 
 MV3 forbids remotely hosted code, so all importers are compiled in. There is no plugin loader, only a registry.
 
-### 4.6 Dialdex exchange format and smart merge
+### 4.5 Dialdex exchange format and smart merge
 
 Our own format, fully under our control. The foreign formats are only an input; Dialdex JSON is the reference.
 
@@ -296,7 +296,7 @@ every dial you forgot to tag.
 Tags and groups are matched by name (case-insensitive), not by ID, so two machines with independent tag lists fit
 together. Import never deletes. Propagating deletions needs tombstones and belongs to sync (3.8).
 
-### 4.5 Permissions plan
+### 4.6 Permissions plan
 
 | Permission | When | Why |
 |---|---|---|
