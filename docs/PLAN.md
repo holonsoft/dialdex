@@ -55,7 +55,7 @@ Legend: **MVP** = needed for the first usable version, **v1** = needed before st
 | Import preview: counts, duplicates, skipped items, choose strategy before writing | MVP | Nothing is written before the user confirms |
 | Idempotent re-import (provenance per dial) | MVP | Re-running an import updates instead of duplicating |
 | Export / import of Dialdex JSON (versioned schema) | MVP | Also the backup mechanism |
-| More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.5) |
+| More importers (other speed dial addons, browser top sites, HTML bookmark files) | later | Pluggable via the importer contract (4.4) |
 | More exporters (HTML bookmark file, CSV) | later | Same contract, reversed |
 | Import settings from old addons (a handful of keys) | later | |
 | Archive instead of delete | v1 | Archived dials stay searchable on demand |
@@ -233,7 +233,7 @@ interface TagRule   { id: string; pattern: string; kind: "domain" | "regex"; tag
 Thumbnails, favicons and page text live in separate object stores (blobs, not data URLs), so the main dial list
 stays small and fast to load. The blob store is part of M1, because the first import already brings ~700 images.
 
-### 4.5 Import / export contract
+### 4.4 Import / export contract
 
 Importers and exporters are the main extension point. They live in the core layer, have no browser API
 dependency and are unit tested against synthetic fixtures.
@@ -260,7 +260,7 @@ Flow: `detect` -> `parse` -> preview (counts, duplicates, skipped, strategy: mer
 
 MV3 forbids remotely hosted code, so all importers are compiled in. There is no plugin loader, only a registry.
 
-### 4.4 Permissions plan
+### 4.5 Permissions plan
 
 | Permission | When | Why |
 |---|---|---|

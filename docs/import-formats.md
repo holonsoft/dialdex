@@ -3,7 +3,7 @@
 Reverse-engineered from real backup files (not committed, they contain private URLs).
 All example values below are invented. Analysed: 2026-11-17.
 
-The importers live in the core layer and map each format to a neutral `ImportBundle` (see PLAN.md 4.5).
+The importers live in the core layer and map each format to a neutral `ImportBundle` (see PLAN.md 4.4).
 This document lists only the facts that shape the mapper code.
 
 ---
